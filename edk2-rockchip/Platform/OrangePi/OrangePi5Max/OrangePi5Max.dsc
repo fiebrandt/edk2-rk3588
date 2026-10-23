@@ -80,8 +80,10 @@
   gRK3588TokenSpaceGuid.PcdComboPhy0Switchable|FALSE
   gRK3588TokenSpaceGuid.PcdComboPhy1Switchable|FALSE
   gRK3588TokenSpaceGuid.PcdComboPhy2Switchable|FALSE
-  gRK3588TokenSpaceGuid.PcdComboPhy0ModeDefault|$(COMBO_PHY_MODE_PCIE)
-  gRK3588TokenSpaceGuid.PcdComboPhy1ModeDefault|$(COMBO_PHY_MODE_PCIE)
+  # Only the RTL8125B on PCIe 2.0 L1 (ComboPhy2) is wired; ComboPhy0
+  # (pcie2x1l2) and ComboPhy1 (pcie2x1l0) are unused on this board.
+  gRK3588TokenSpaceGuid.PcdComboPhy0ModeDefault|$(COMBO_PHY_MODE_UNCONNECTED)
+  gRK3588TokenSpaceGuid.PcdComboPhy1ModeDefault|$(COMBO_PHY_MODE_UNCONNECTED)
   gRK3588TokenSpaceGuid.PcdComboPhy2ModeDefault|$(COMBO_PHY_MODE_PCIE)
 
   #
