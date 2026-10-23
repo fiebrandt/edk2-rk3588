@@ -1,6 +1,18 @@
 /** @file
 *  I/O Remapping Table (Iort)
 *
+*  Routes all PCIe root complexes through the PCIe SMMU (MMU-600) to the two
+*  GIC ITS blocks, mirroring the "iommu-map" and "msi-map" properties of the
+*  mainline DT: PCIe 3.0 (segments 0, 1) use ITS1, PCIe 2.0 (segments 2, 3, 4)
+*  use ITS0. StreamIDs and DeviceIDs are the raw Requester IDs, which are kept
+*  distinct across segments by spacing their bus numbers (see Rk3588Pcie.h).
+*
+*  On RK3588, PCIe writes to the ITS doorbell only arrive when translated by
+*  this SMMU; with the SMMU disabled (bypass) MSIs are lost. The OS therefore
+*  has to use the SMMU for MSIs to work.
+*
+*  Only installed when the PCIe MSI mode is set to ITS.
+*
 *  Copyright (c) 2018, ARM Ltd. All rights reserved.
 *
 *  SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -10,6 +22,7 @@
 #include <IndustryStandard/Acpi.h>
 #include <IndustryStandard/Acpi62.h>
 #include <IndustryStandard/IoRemappingTable.h>
+#include <Library/Rk3588Pcie.h>
 #include "AcpiTables.h"
 
 #pragma pack(1)
@@ -25,13 +38,76 @@ typedef struct {
 } ARM_EFI_ACPI_6_0_IO_REMAPPING_RC_NODE;
 
 typedef struct {
+  EFI_ACPI_6_0_IO_REMAPPING_SMMU3_NODE    SmmuNode;
+  EFI_ACPI_6_0_IO_REMAPPING_ID_TABLE      SmmuIdMap[2];
+} ARM_EFI_ACPI_6_0_IO_REMAPPING_SMMU3_NODE;
+
+typedef struct {
   EFI_ACPI_6_0_IO_REMAPPING_TABLE           Header;
   ARM_EFI_ACPI_6_0_IO_REMAPPING_ITS_NODE    Its0Node;
   ARM_EFI_ACPI_6_0_IO_REMAPPING_ITS_NODE    Its1Node;
-  ARM_EFI_ACPI_6_0_IO_REMAPPING_RC_NODE     Rc3x4Node;
+  ARM_EFI_ACPI_6_0_IO_REMAPPING_SMMU3_NODE  SmmuNode;
+  ARM_EFI_ACPI_6_0_IO_REMAPPING_RC_NODE     RcNodes[NUM_PCIE_CONTROLLER];
 } ARM_EFI_ACPI_6_0_IO_REMAPPING_TABLE;
 
-#pragma pack (1)
+//
+// PCIe SMMU (mmu600_pcie in the mainline DT)
+//
+#define RK3588_PCIE_SMMU_BASE  0xFC900000
+#define RK3588_PCIE_SMMU_EVTQ  (369 + 32)
+#define RK3588_PCIE_SMMU_GERR  (371 + 32)
+#define RK3588_PCIE_SMMU_PRIQ  (374 + 32)
+#define RK3588_PCIE_SMMU_SYNC  (367 + 32)
+
+// StreamIDs of segments 0-1 go to ITS1, those of segments 2-4 to ITS0.
+#define RK3588_ITS1_SID_BASE   (PCIE_BUS_BASE (PCIE_SEGMENT_PCIE30X4) << 8)
+#define RK3588_ITS0_SID_BASE   (PCIE_BUS_BASE (PCIE_SEGMENT_PCIE20L0) << 8)
+#define RK3588_SID_END         ((PCIE_BUS_LIMIT (PCIE_SEGMENT_PCIE20L2) + 1) << 8)
+
+#pragma pack ()
+
+#define IORT_ITS_NODE_INIT(ItsId)                                    \
+  {                                                                  \
+    {                                                                \
+      {                                                              \
+        EFI_ACPI_IORT_TYPE_ITS_GROUP,                    /* Type */  \
+        sizeof (ARM_EFI_ACPI_6_0_IO_REMAPPING_ITS_NODE), /* Length */ \
+        0,                                               /* Revision */ \
+        0,                                               /* Identifier */ \
+        0,                                               /* NumIdMappings */ \
+        0,                                               /* IdReference */ \
+      },                                                             \
+      1,                                                 /* ITS count */ \
+    },                                                               \
+    ItsId,                                               /* GIC ITS Identifiers */ \
+  }
+
+#define IORT_RC_NODE_INIT(Segment)                                         \
+  {                                                                                 \
+    {                                                                               \
+      {                                                                             \
+        EFI_ACPI_IORT_TYPE_ROOT_COMPLEX,                            /* Type */      \
+        sizeof (ARM_EFI_ACPI_6_0_IO_REMAPPING_RC_NODE),             /* Length */    \
+        0,                                                          /* Revision */  \
+        0,                                                          /* Identifier */ \
+        1,                                                          /* NumIdMappings */ \
+        OFFSET_OF (ARM_EFI_ACPI_6_0_IO_REMAPPING_RC_NODE, RcIdMap)  /* IdReference */ \
+      },                                                                            \
+      0,                                          /* CacheCoherent */               \
+      0,                                          /* AllocationHints */             \
+      0,                                          /* Reserved */                    \
+      0,                                          /* MemoryAccessFlags */           \
+      EFI_ACPI_IORT_ROOT_COMPLEX_ATS_UNSUPPORTED, /* AtsAttribute */                \
+      Segment,                                    /* PciSegmentNumber */            \
+    },                                                                              \
+    {                                                                               \
+      PCIE_BUS_BASE (Segment) << 8,                                /* InputBase */  \
+      (PCIE_BUS_COUNT << 8) - 1,                                   /* NumIds */     \
+      PCIE_BUS_BASE (Segment) << 8,                                /* OutputBase */ \
+      OFFSET_OF (ARM_EFI_ACPI_6_0_IO_REMAPPING_TABLE, SmmuNode),   /* OutputReference */ \
+      0,                                                           /* Flags */      \
+    }                                                                               \
+  }
 
 ARM_EFI_ACPI_6_0_IO_REMAPPING_TABLE  Iort =
 {
@@ -43,74 +119,61 @@ ARM_EFI_ACPI_6_0_IO_REMAPPING_TABLE  Iort =
       ARM_EFI_ACPI_6_0_IO_REMAPPING_TABLE,
       EFI_ACPI_IO_REMAPPING_TABLE_REVISION_00
     ),
-    3,                                        // NumNodes
+    3 + NUM_PCIE_CONTROLLER,                  // NumNodes
     sizeof (EFI_ACPI_6_0_IO_REMAPPING_TABLE), // NodeOffset
     0,                                        // Reserved
   },
 
-  // ARM_EFI_ACPI_6_0_IO_REMAPPING_ITS_NODE
+  IORT_ITS_NODE_INIT (0),
+  IORT_ITS_NODE_INIT (1),
+
+  // ARM_EFI_ACPI_6_0_IO_REMAPPING_SMMU3_NODE
   {
-    // EFI_ACPI_6_0_IO_REMAPPING_ITS_NODE
     {
-      // EFI_ACPI_6_0_IO_REMAPPING_NODE
       {
-        EFI_ACPI_IORT_TYPE_ITS_GROUP,                    // Type
-        sizeof (ARM_EFI_ACPI_6_0_IO_REMAPPING_ITS_NODE), // Length
-        0,                                               // Revision
-        0,                                               // Reserved
-        0,                                               // NumIdMappings
-        0,                                               // IdReference
+        EFI_ACPI_IORT_TYPE_SMMUv3,                                      // Type
+        sizeof (ARM_EFI_ACPI_6_0_IO_REMAPPING_SMMU3_NODE),              // Length
+        2,                                                              // Revision
+        0,                                                              // Identifier
+        2,                                                              // NumIdMappings
+        OFFSET_OF (ARM_EFI_ACPI_6_0_IO_REMAPPING_SMMU3_NODE, SmmuIdMap) // IdReference
       },
-      1,    // ITS count
+      RK3588_PCIE_SMMU_BASE,                  // Base
+      0,                                      // Flags (not coherent)
+      0,                                      // Reserved
+      0,                                      // VatosAddress
+      EFI_ACPI_IORT_SMMUv3_MODEL_GENERIC,     // Model
+      RK3588_PCIE_SMMU_EVTQ,                  // Event
+      RK3588_PCIE_SMMU_PRIQ,                  // Pri
+      RK3588_PCIE_SMMU_GERR,                  // Gerr
+      RK3588_PCIE_SMMU_SYNC,                  // Sync
+      0,                                      // ProximityDomain
+      0,                                      // DeviceIdMappingIndex (unused, wired interrupts)
     },
-    0,      // GIC ITS Identifiers
+    {
+      {
+        RK3588_ITS1_SID_BASE,                                      // InputBase
+        RK3588_ITS0_SID_BASE - RK3588_ITS1_SID_BASE - 1,           // NumIds
+        RK3588_ITS1_SID_BASE,                                      // OutputBase
+        OFFSET_OF (ARM_EFI_ACPI_6_0_IO_REMAPPING_TABLE, Its1Node), // OutputReference
+        0,                                                         // Flags
+      },
+      {
+        RK3588_ITS0_SID_BASE,                                      // InputBase
+        RK3588_SID_END - RK3588_ITS0_SID_BASE - 1,                 // NumIds
+        RK3588_ITS0_SID_BASE,                                      // OutputBase
+        OFFSET_OF (ARM_EFI_ACPI_6_0_IO_REMAPPING_TABLE, Its0Node), // OutputReference
+        0,                                                         // Flags
+      },
+    }
   },
 
-  // ARM_EFI_ACPI_6_0_IO_REMAPPING_ITS_NODE
   {
-    // EFI_ACPI_6_0_IO_REMAPPING_ITS_NODE
-    {
-      // EFI_ACPI_6_0_IO_REMAPPING_NODE
-      {
-        EFI_ACPI_IORT_TYPE_ITS_GROUP,                    // Type
-        sizeof (ARM_EFI_ACPI_6_0_IO_REMAPPING_ITS_NODE), // Length
-        0,                                               // Revision
-        0,                                               // Reserved
-        0,                                               // NumIdMappings
-        0,                                               // IdReference
-      },
-      1,    // ITS count
-    },
-    1,      // GIC ITS Identifiers
-  },
-  // ARM_EFI_ACPI_6_0_IO_REMAPPING_RC_NODE
-  {
-    // EFI_ACPI_6_0_IO_REMAPPING_RC_NODE
-    {
-      // EFI_ACPI_6_0_IO_REMAPPING_NODE
-      {
-        EFI_ACPI_IORT_TYPE_ROOT_COMPLEX,                           // Type
-        sizeof (ARM_EFI_ACPI_6_0_IO_REMAPPING_RC_NODE),            // Length
-        0,                                                         // Revision
-        0,                                                         // Reserved
-        1,                                                         // NumIdMappings
-        OFFSET_OF (ARM_EFI_ACPI_6_0_IO_REMAPPING_RC_NODE, RcIdMap) // IdReference
-      },
-      0,                                        // CacheCoherent
-      0,                                        // AllocationHints
-      0,                                        // Reserved
-      0,                                        // MemoryAccessFlags
-      EFI_ACPI_IORT_ROOT_COMPLEX_ATS_SUPPORTED, // AtsAttribute
-      0x0,                                      // PciSegmentNumber
-    },
-    // EFI_ACPI_6_0_IO_REMAPPING_ID_TABLE
-    {
-      0x0000,                                                    // InputBase
-      0xffff,                                                    // NumIds
-      0x0000,                                                    // OutputBase
-      OFFSET_OF (ARM_EFI_ACPI_6_0_IO_REMAPPING_TABLE, Its1Node), // OutputReference
-      0,                                                         // Flags
-    }
+    IORT_RC_NODE_INIT (PCIE_SEGMENT_PCIE30X4),
+    IORT_RC_NODE_INIT (PCIE_SEGMENT_PCIE30X2),
+    IORT_RC_NODE_INIT (PCIE_SEGMENT_PCIE20L0),
+    IORT_RC_NODE_INIT (PCIE_SEGMENT_PCIE20L1),
+    IORT_RC_NODE_INIT (PCIE_SEGMENT_PCIE20L2),
   }
 };
 

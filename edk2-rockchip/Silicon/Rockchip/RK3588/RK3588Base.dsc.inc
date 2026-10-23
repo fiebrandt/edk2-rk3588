@@ -56,6 +56,9 @@
   DEFINE ACPI_PCIE_ECAM_COMPAT_MODE_NXPMX6      = 0x00000002
   DEFINE ACPI_PCIE_ECAM_COMPAT_MODE_GRAVITON    = 0x00000004
 
+  DEFINE ACPI_PCIE_MSI_MODE_DISABLED            = 0x00000000
+  DEFINE ACPI_PCIE_MSI_MODE_ITS                 = 0x00000001
+
   DEFINE FDT_COMPAT_MODE_UNSUPPORTED    = 0
   DEFINE FDT_COMPAT_MODE_VENDOR         = 1
   DEFINE FDT_COMPAT_MODE_MAINLINE       = 2
@@ -282,6 +285,7 @@
   #
   gRK3588TokenSpaceGuid.PcdConfigTableModeDefault|$(CONFIG_TABLE_MODE_ACPI_FDT)
   gRK3588TokenSpaceGuid.PcdAcpiPcieEcamCompatModeDefault|$(ACPI_PCIE_ECAM_COMPAT_MODE_AUTO)
+  gRK3588TokenSpaceGuid.PcdAcpiPcieMsiModeDefault|$(ACPI_PCIE_MSI_MODE_DISABLED)
   gRK3588TokenSpaceGuid.PcdFdtCompatModeDefault|$(FDT_COMPAT_MODE_MAINLINE)
   gRK3588TokenSpaceGuid.PcdFdtForceGopDefault|FALSE
   gRK3588TokenSpaceGuid.PcdFdtSupportOverridesDefault|FALSE
@@ -372,6 +376,7 @@
   #
   gRK3588TokenSpaceGuid.PcdConfigTableMode|L"ConfigTableMode"|gRK3588DxeFormSetGuid|0x0|gRK3588TokenSpaceGuid.PcdConfigTableModeDefault
   gRK3588TokenSpaceGuid.PcdAcpiPcieEcamCompatMode|L"AcpiPcieEcamCompatMode"|gRK3588DxeFormSetGuid|0x0|gRK3588TokenSpaceGuid.PcdAcpiPcieEcamCompatModeDefault
+  gRK3588TokenSpaceGuid.PcdAcpiPcieMsiMode|L"AcpiPcieMsiMode"|gRK3588DxeFormSetGuid|0x0|gRK3588TokenSpaceGuid.PcdAcpiPcieMsiModeDefault
   gRK3588TokenSpaceGuid.PcdFdtCompatMode|L"FdtCompatMode"|gRK3588DxeFormSetGuid|0x0|gRK3588TokenSpaceGuid.PcdFdtCompatModeDefault
   gRK3588TokenSpaceGuid.PcdFdtForceGop|L"FdtForceGop"|gRK3588DxeFormSetGuid|0x0|gRK3588TokenSpaceGuid.PcdFdtForceGopDefault
   gRK3588TokenSpaceGuid.PcdFdtSupportOverrides|L"FdtSupportOverrides"|gRK3588DxeFormSetGuid|0x0|gRK3588TokenSpaceGuid.PcdFdtSupportOverridesDefault

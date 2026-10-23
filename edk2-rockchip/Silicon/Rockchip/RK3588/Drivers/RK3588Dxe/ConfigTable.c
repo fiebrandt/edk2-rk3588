@@ -52,6 +52,21 @@ IsAcpiPcieEcamCompatModeSupported (
   return FALSE;
 }
 
+STATIC
+BOOLEAN
+IsAcpiPcieMsiModeSupported (
+  IN UINT32  MsiMode
+  )
+{
+  switch (MsiMode) {
+    case ACPI_PCIE_MSI_MODE_DISABLED:
+    case ACPI_PCIE_MSI_MODE_ITS:
+      return TRUE;
+  }
+
+  return FALSE;
+}
+
 VOID
 EFIAPI
 ApplyConfigTableVariables (
@@ -98,6 +113,19 @@ SetupConfigTableVariables (
                   );
   if (EFI_ERROR (Status) || !IsAcpiPcieEcamCompatModeSupported (Var32)) {
     Status = PcdSet32S (PcdAcpiPcieEcamCompatMode, FixedPcdGet32 (PcdAcpiPcieEcamCompatModeDefault));
+    ASSERT_EFI_ERROR (Status);
+  }
+
+  Size   = sizeof (UINT32);
+  Status = gRT->GetVariable (
+                  L"AcpiPcieMsiMode",
+                  &gRK3588DxeFormSetGuid,
+                  NULL,
+                  &Size,
+                  &Var32
+                  );
+  if (EFI_ERROR (Status) || !IsAcpiPcieMsiModeSupported (Var32)) {
+    Status = PcdSet32S (PcdAcpiPcieMsiMode, FixedPcdGet32 (PcdAcpiPcieMsiModeDefault));
     ASSERT_EFI_ERROR (Status);
   }
 

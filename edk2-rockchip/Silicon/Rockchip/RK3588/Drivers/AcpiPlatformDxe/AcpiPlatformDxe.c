@@ -148,6 +148,70 @@ AcpiDsdtFixupStatus (
 }
 
 STATIC
+BOOLEAN
+EFIAPI
+AcpiCheckTableInstall (
+  IN EFI_ACPI_DESCRIPTION_HEADER  *AcpiHeader
+  )
+{
+  if (AcpiHeader->Signature == EFI_ACPI_6_2_IO_REMAPPING_TABLE_SIGNATURE) {
+    return PcdGet32 (PcdAcpiPcieMsiMode) == ACPI_PCIE_MSI_MODE_ITS;
+  }
+
+  return TRUE;
+}
+
+//
+// The MADT ends with the optional ITS entries (see Madt.aslc).
+// Drop them unless the PCIe MSI mode is set to ITS.
+//
+STATIC
+VOID
+AcpiFixupMadtMsi (
+  VOID
+  )
+{
+  EFI_STATUS                   Status;
+  UINTN                        Index;
+  UINTN                        TableKey;
+  EFI_ACPI_DESCRIPTION_HEADER  *MadtTable;
+  UINT8                        *Ptr;
+  UINT8                        *End;
+
+  if (PcdGet32 (PcdAcpiPcieMsiMode) == ACPI_PCIE_MSI_MODE_ITS) {
+    return;
+  }
+
+  Index  = 0;
+  Status = AcpiLocateTableBySignature (
+             mAcpiSdtProtocol,
+             EFI_ACPI_6_0_MULTIPLE_APIC_DESCRIPTION_TABLE_SIGNATURE,
+             &Index,
+             &MadtTable,
+             &TableKey
+             );
+  if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "AcpiPlatform: Couldn't locate ACPI MADT table! Status=%r\n", Status));
+    return;
+  }
+
+  Ptr = (UINT8 *)MadtTable + sizeof (EFI_ACPI_6_0_MULTIPLE_APIC_DESCRIPTION_TABLE_HEADER);
+  End = (UINT8 *)MadtTable + MadtTable->Length;
+
+  while ((Ptr + 2 <= End) && (Ptr[1] != 0)) {
+    if (Ptr[0] == EFI_ACPI_6_0_GIC_ITS) {
+      MadtTable->Length = (UINT32)(Ptr - (UINT8 *)MadtTable);
+      AcpiUpdateChecksum ((UINT8 *)MadtTable, MadtTable->Length);
+      return;
+    }
+
+    Ptr += Ptr[1];
+  }
+
+  DEBUG ((DEBUG_ERROR, "AcpiPlatform: Unexpected MADT layout, ITS entries not found!\n"));
+}
+
+STATIC
 VOID
 EFIAPI
 NotifyEndOfDxeEvent (
@@ -170,7 +234,7 @@ NotifyEndOfDxeEvent (
     return;
   }
 
-  Status = LocateAndInstallAcpiFromFvConditional (&mAcpiTableFile, NULL);
+  Status = LocateAndInstallAcpiFromFvConditional (&mAcpiTableFile, AcpiCheckTableInstall);
   if (EFI_ERROR (Status)) {
     DEBUG ((
       DEBUG_WARN,
@@ -202,6 +266,8 @@ NotifyEndOfDxeEvent (
   AcpiDsdtFixupStatus (mAcpiSdtProtocol, TableHandle);
 
   mAcpiSdtProtocol->Close (TableHandle);
+
+  AcpiFixupMadtMsi ();
 }
 
 STATIC

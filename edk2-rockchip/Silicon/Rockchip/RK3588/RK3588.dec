@@ -48,6 +48,7 @@
 
   gRK3588TokenSpaceGuid.PcdConfigTableModeDefault|0|UINT32|0x00010300
   gRK3588TokenSpaceGuid.PcdAcpiPcieEcamCompatModeDefault|0|UINT32|0x00010301
+  gRK3588TokenSpaceGuid.PcdAcpiPcieMsiModeDefault|0|UINT32|0x00010302
   gRK3588TokenSpaceGuid.PcdFdtCompatModeDefault|0|UINT32|0x00010351
   gRK3588TokenSpaceGuid.PcdFdtForceGopDefault|0|UINT8|0x00010352
   gRK3588TokenSpaceGuid.PcdFdtSupportOverridesDefault|0|UINT8|0x00010353
@@ -120,6 +121,7 @@
 
   gRK3588TokenSpaceGuid.PcdConfigTableMode|0|UINT32|0x00000300
   gRK3588TokenSpaceGuid.PcdAcpiPcieEcamCompatMode|0|UINT32|0x00000301
+  gRK3588TokenSpaceGuid.PcdAcpiPcieMsiMode|0|UINT32|0x00000302
   gRK3588TokenSpaceGuid.PcdFdtCompatMode|0|UINT32|0x00000351
   gRK3588TokenSpaceGuid.PcdFdtForceGop|0|UINT8|0x00000352
   gRK3588TokenSpaceGuid.PcdFdtSupportOverrides|0|UINT8|0x00000353

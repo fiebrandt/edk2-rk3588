@@ -102,6 +102,8 @@
   gRK3588TokenSpaceGuid.PcdConfigTableMode
   gRK3588TokenSpaceGuid.PcdAcpiPcieEcamCompatModeDefault
   gRK3588TokenSpaceGuid.PcdAcpiPcieEcamCompatMode
+  gRK3588TokenSpaceGuid.PcdAcpiPcieMsiModeDefault
+  gRK3588TokenSpaceGuid.PcdAcpiPcieMsiMode
   gRK3588TokenSpaceGuid.PcdFdtCompatModeDefault
   gRK3588TokenSpaceGuid.PcdFdtCompatMode
   gRK3588TokenSpaceGuid.PcdFdtForceGopDefault

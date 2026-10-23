@@ -247,6 +247,13 @@
 #string STR_ACPI_PCIE_ECAM_COMPAT_MODE_NXPMX6              #language en-US "NXPMX6"
 #string STR_ACPI_PCIE_ECAM_COMPAT_MODE_GRAVITON            #language en-US "AMAZON GRAVITON"
 
+#string STR_ACPI_PCIE_MSI_MODE_PROMPT                      #language en-US "PCIe MSI Mode (Experimental)"
+#string STR_ACPI_PCIE_MSI_MODE_HELP                        #language en-US "Choose how to expose PCIe MSI support to the OS.\n\n"
+                                                                           "Disabled - compatible with all OSes. Devices use legacy INTx interrupts.\n\n"
+                                                                           "ITS - publishes the GIC ITS blocks and an IORT that routes all root complexes through the PCIe SMMU. On RK3588, MSIs only reach the ITS when the OS enables the SMMU (translation or bypass streams), and the OS must also apply the GIC-600 shareability erratum workaround (RK3588001). Not usable with Windows or the NXPMX6 ECAM mode."
+#string STR_ACPI_PCIE_MSI_MODE_DISABLED                    #language en-US "Disabled"
+#string STR_ACPI_PCIE_MSI_MODE_ITS                         #language en-US "ITS"
+
 #string STR_CONFIG_TABLE_FDT_SUBTITLE                      #language en-US "Device Tree Configuration"
 
 #string STR_FDT_COMPAT_MODE_PROMPT                         #language en-US "Compatibility Mode"
