@@ -251,6 +251,8 @@ PcieIoInit (
     case PCIE_SEGMENT_PCIE20L1: // RTL8125B
       /* reset */
       GpioPinSetDirection (3, GPIO_PIN_PD4, GPIO_PIN_OUTPUT);
+      /* vcc3v3_pcie_eth */
+      GpioPinSetDirection (0, GPIO_PIN_PD3, GPIO_PIN_OUTPUT);
       break;
     case PCIE_SEGMENT_PCIE20L2:
       break;
@@ -270,8 +272,11 @@ PciePowerEn (
     case PCIE_SEGMENT_PCIE30X4:
       GpioPinWrite (2, GPIO_PIN_PB6, Enable);
       break;
-    case PCIE_SEGMENT_PCIE20L0:
     case PCIE_SEGMENT_PCIE20L1:
+      /* vcc3v3_pcie_eth, active low */
+      GpioPinWrite (0, GPIO_PIN_PD3, !Enable);
+      break;
+    case PCIE_SEGMENT_PCIE20L0:
     case PCIE_SEGMENT_PCIE20L2:
       break;
     default:
