@@ -10,6 +10,7 @@
  **/
 
 #include <IndustryStandard/AcpiAml.h>
+#include <IndustryStandard/IoRemappingTable.h>
 #include <Protocol/ExitBootServicesOsNotify.h>
 #include <Protocol/LoadedImage.h>
 #include <Protocol/NonDiscoverableDevice.h>
@@ -270,6 +271,60 @@ NotifyEndOfDxeEvent (
   AcpiFixupMadtMsi ();
 }
 
+//
+// In "Single Device" ECAM mode, config accesses to device N on the secondary
+// bus are shifted to device N + 1 (see the 0x8000 MCFG offset below), so the
+// endpoints capture devfn + 8 as their Requester ID. Shift the IORT root
+// complex ID mapping of the segment accordingly, so that the OS derives the
+// StreamID / DeviceID actually seen by the SMMU / ITS.
+//
+STATIC
+VOID
+AcpiFixupIortRidShift (
+  IN UINT32  Segment,
+  IN UINT32  OsBusBase
+  )
+{
+  EFI_STATUS                          Status;
+  UINTN                               Index;
+  UINTN                               TableKey;
+  EFI_ACPI_6_0_IO_REMAPPING_TABLE     *Iort;
+  EFI_ACPI_6_0_IO_REMAPPING_NODE      *Node;
+  EFI_ACPI_6_0_IO_REMAPPING_RC_NODE   *RcNode;
+  EFI_ACPI_6_0_IO_REMAPPING_ID_TABLE  *IdMap;
+  UINT32                              NodeIndex;
+
+  Index  = 0;
+  Status = AcpiLocateTableBySignature (
+             mAcpiSdtProtocol,
+             EFI_ACPI_6_2_IO_REMAPPING_TABLE_SIGNATURE,
+             &Index,
+             (EFI_ACPI_DESCRIPTION_HEADER **)&Iort,
+             &TableKey
+             );
+  if (EFI_ERROR (Status)) {
+    // No IORT, the PCIe MSI mode is not ITS.
+    return;
+  }
+
+  Node = (EFI_ACPI_6_0_IO_REMAPPING_NODE *)((UINT8 *)Iort + Iort->NodeOffset);
+  for (NodeIndex = 0; NodeIndex < Iort->NumNodes; NodeIndex++) {
+    if (Node->Type == EFI_ACPI_IORT_TYPE_ROOT_COMPLEX) {
+      RcNode = (EFI_ACPI_6_0_IO_REMAPPING_RC_NODE *)Node;
+      if ((RcNode->PciSegmentNumber == Segment) && (Node->NumIdMappings > 0)) {
+        IdMap             = (EFI_ACPI_6_0_IO_REMAPPING_ID_TABLE *)((UINT8 *)Node + Node->IdReference);
+        IdMap->InputBase  = OsBusBase << 8;
+        IdMap->NumIds     = 0x100 - 8 - 1;
+        IdMap->OutputBase = IdMap->InputBase + 8;
+      }
+    }
+
+    Node = (EFI_ACPI_6_0_IO_REMAPPING_NODE *)((UINT8 *)Node + Node->Length);
+  }
+
+  AcpiUpdateChecksum ((UINT8 *)Iort, Iort->Header.Length);
+}
+
 STATIC
 EFI_STATUS
 EFIAPI
@@ -441,6 +496,7 @@ AcpiFixupPcieEcam (
         ((PcdGet32 (PcdPcieEcamCompliantSegmentsMask) & (1 << Index)) == 0))
     {
       McfgTable->ConfigSpaces[0][Index].BaseAddress += 0x8000;
+      AcpiFixupIortRidShift (Index, McfgTable->ConfigSpaces[0][Index].StartBusNumber);
     }
   }
 
